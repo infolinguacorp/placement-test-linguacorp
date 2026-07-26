@@ -120,6 +120,26 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .stat-num{font-family:'Playfair Display',serif;font-size:24px;font-weight:600;color:var(--navy);line-height:1;margin-bottom:3px;}
 .stat-lbl{font-family:'DM Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);}
 .inconsistency-alert{background:rgba(192,57,43,0.08);border:1.5px solid rgba(192,57,43,0.3);border-radius:var(--radius-sm);padding:0.9rem 1.1rem;font-size:13px;color:var(--red);line-height:1.6;margin-bottom:1rem;}
+.open-textarea{width:100%;background:var(--surface);border:1.5px solid var(--navy-border);border-radius:var(--radius-sm);padding:14px 16px;font-family:'DM Sans',sans-serif;font-size:14px;color:var(--text);resize:vertical;min-height:140px;line-height:1.7;transition:border-color 0.15s;}
+.open-textarea:focus{outline:none;border-color:var(--navy);}
+.open-textarea::placeholder{color:var(--muted);opacity:0.5;}
+.open-label{font-size:13px;color:var(--muted);margin-bottom:10px;display:block;line-height:1.6;}
+.rec-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:0.75rem;}
+.rec-btn{display:inline-flex;align-items:center;gap:7px;padding:10px 18px;border-radius:var(--radius-sm);border:1.5px solid var(--navy);background:var(--navy);color:white;font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;transition:all 0.15s;}
+.rec-btn:hover{background:#1a2260;}
+.rec-btn.stop{background:var(--red);border-color:var(--red);}
+.rec-btn:disabled{opacity:0.4;cursor:not-allowed;}
+.rec-status{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);}
+.rec-status.recording{color:var(--red);}
+.audio-playback{width:100%;margin-top:0.5rem;border-radius:var(--radius-sm);}
+.rubric{background:var(--navy-light);border:1px solid var(--navy-border);border-radius:var(--radius-sm);padding:0.75rem 1rem;margin-top:0.75rem;}
+.rubric-title{font-family:'DM Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--navy);margin-bottom:0.5rem;}
+.rubric-item{font-size:12px;color:var(--muted);line-height:1.6;display:flex;gap:8px;}
+.rubric-item::before{content:'—';color:var(--navy);flex-shrink:0;}
+.thanks-card{background:var(--navy);color:#fff;border-radius:var(--radius);padding:2rem;text-align:center;}
+.thanks-icon{font-size:48px;margin-bottom:1rem;}
+.thanks-title{font-family:'Playfair Display',serif;font-size:28px;font-weight:600;margin-bottom:1rem;line-height:1.2;}
+.thanks-msg{font-size:14px;color:rgba(255,255,255,0.75);line-height:1.75;}
 </style>
 </head>
 <body>
@@ -184,20 +204,34 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
   </div>
 </div>
 
+<!-- OPEN QUESTIONS -->
+<div id="open-questions" class="screen">
+  <div class="progress-wrap">
+    <div class="progress-meta">
+      <span id="open-counter">Pregunta adicional 1 de 2</span>
+      <span>Sección abierta</span>
+    </div>
+    <div class="progress-track"><div class="progress-fill" style="width:100%"></div></div>
+  </div>
+  <div class="section-row">
+    <div class="section-tag" id="open-tag">Writing</div>
+    <div class="section-line"></div>
+  </div>
+  <div class="q-num" id="open-num">21</div>
+  <div class="q-text" id="open-q-text"></div>
+  <div id="open-body"></div>
+  <div class="nav-row">
+    <button class="btn btn-primary" id="open-next-btn" onclick="nextOpenQuestion()">Siguiente →</button>
+  </div>
+</div>
+
 <!-- RESULTS -->
 <div id="results" class="screen">
-  <div class="results-eyebrow">Tus Resultados</div>
-  <h2 class="results-title" id="res-title">Test completado</h2>
-  <p class="results-sub" id="res-sub"></p>
-  <div class="level-card" id="level-card">
-    <div class="level-eyebrow">Nivel Recomendado</div>
-    <div class="level-name" id="level-name"></div>
-    <div class="level-desc" id="level-desc"></div>
-    <div class="level-score" id="level-score"></div>
-    <div class="level-score-lbl">preguntas correctas</div>
+  <div class="thanks-card">
+    <div class="thanks-icon">🎉</div>
+    <div class="thanks-title">¡Gracias por completar tu prueba de nivel!</div>
+    <p class="thanks-msg">Tus respuestas han sido enviadas a la coordinación académica de LinguaCorp.<br><br>Nos pondremos en contacto contigo pronto para compartirte los resultados y definir juntos el mejor camino para tu aprendizaje.</p>
   </div>
-  <div class="stats-grid" id="stats-grid"></div>
-  <div id="alert-wrap"></div>
 </div>
 
 </div>
@@ -237,7 +271,13 @@ let history = [];
 let currentQ = null;
 let answered = false;
 const MAX_QUESTIONS = 20;
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby2qhecM0cOyFUZleye-m6rzavL1IHU0dsk54A32yiPP-EmXUQLRXdKwRRHuJ_noakG/exec';
+let openPhase = false;
+let openStep = 0;
+let writingAnswer = '';
+let speakingAudioBase64 = null;
+let mediaRecorder = null;
+let audioChunks = [];
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbybS6ZF_IeJI09XnmgWH7_hlUep3fT3uDZoR9Wsx2seDwG5B9DA1EykE8zOuHVHZVz2/exec';
 
 // ── START ──
 function startTest() {
@@ -284,7 +324,7 @@ function getNextQuestion(level) {
 
 // ── RENDER QUESTION ──
 function nextQuestion() {
-  if (questionCount >= MAX_QUESTIONS || shouldStop()) { showResults(); return; }
+  if (questionCount >= MAX_QUESTIONS || shouldStop()) { showOpenQuestions(); return; }
 
   let q = getNextQuestion(currentLevel);
   if (!q) {
@@ -425,31 +465,7 @@ function getFinalLevel() {
 function showResults() {
   show('results');
   const finalLevel = getFinalLevel();
-  const info = LEVEL_INFO[finalLevel];
   const pct = Math.round(correctCount / questionCount * 100);
-
-  document.getElementById('res-title').textContent = pct >= 70 ? '¡Muy bien!' : pct >= 50 ? '¡Buen trabajo!' : '¡Sigue practicando!';
-  document.getElementById('res-sub').innerHTML =
-    '<strong>' + userInfo.firstName + ' ' + userInfo.lastName + '</strong> · ' + userInfo.email + '<br>' +
-    'Respondiste ' + correctCount + ' de ' + questionCount + ' preguntas correctamente (' + pct + '%).';
-
-  const card = document.getElementById('level-card');
-  card.setAttribute('data-level', finalLevel);
-  document.getElementById('level-name').textContent = info.name;
-  document.getElementById('level-desc').textContent = info.desc;
-  document.getElementById('level-score').textContent = correctCount + '/' + questionCount;
-
-  // Stats per type
-  const byType = {grammar:{c:0,t:0}, listening:{c:0,t:0}, reading:{c:0,t:0}};
-  history.forEach(h => {
-    byType[h.type].t++;
-    if (h.correct) byType[h.type].c++;
-  });
-  document.getElementById('stats-grid').innerHTML = Object.entries(byType).map(([type, s]) => {
-    const p = s.t > 0 ? Math.round(s.c/s.t*100) : 0;
-    const labels = {grammar:'Grammar', listening:'Listening', reading:'Reading'};
-    return '<div class="stat-card"><div class="stat-num">' + p + '%</div><div class="stat-lbl">' + labels[type] + '</div></div>';
-  }).join('');
 
   // Inconsistency check
   const a1 = history.filter(h => h.level === 'A1');
@@ -458,13 +474,93 @@ function showResults() {
   const b1b2Pass = b1b2.length > 0 && b1b2.filter(h => h.correct).length / b1b2.length > 0.5;
   const isInconsistent = a1Fail && b1b2Pass;
 
-  if (isInconsistent) {
-    document.getElementById('alert-wrap').innerHTML =
-      '<div class="inconsistency-alert">⚠️ <strong>Perfil inconsistente</strong> — Se recomienda una entrevista de verificación con el profesor.</div>';
-  }
-
-  // Send to Sheets
   sendResults(finalLevel, pct, isInconsistent);
+}
+
+// ── OPEN QUESTIONS ──
+function showOpenQuestions() {
+  openPhase = true;
+  openStep = 0;
+  show('open-questions');
+  renderOpenQuestion();
+}
+
+function renderOpenQuestion() {
+  if (openStep === 0) {
+    document.getElementById('open-counter').textContent = 'Pregunta adicional 1 de 2';
+    document.getElementById('open-tag').textContent = 'Writing';
+    document.getElementById('open-num').textContent = (MAX_QUESTIONS + 1).toString();
+    document.getElementById('open-q-text').textContent = 'Write a short paragraph (5–8 sentences) describing your daily routine and your relationship with English — when do you use it, how do you feel about it, and what would you like to improve?';
+    document.getElementById('open-next-btn').textContent = 'Siguiente →';
+    document.getElementById('open-body').innerHTML =
+      '<label class="open-label">Escribe tu respuesta en inglés:</label>' +
+      '<textarea class="open-textarea" id="writing-ta" placeholder="Write your paragraph here..."></textarea>';
+    document.getElementById('writing-ta').addEventListener('input', e => { writingAnswer = e.target.value; });
+  } else {
+    document.getElementById('open-counter').textContent = 'Pregunta adicional 2 de 2';
+    document.getElementById('open-tag').textContent = 'Speaking';
+    document.getElementById('open-num').textContent = (MAX_QUESTIONS + 2).toString();
+    document.getElementById('open-q-text').textContent = 'Record a short audio (1–2 minutes) answering this question: Tell us about yourself — who are you, what do you do, and why do you want to improve your English?';
+    document.getElementById('open-next-btn').textContent = 'Finalizar →';
+    document.getElementById('open-body').innerHTML =
+      '<div class="rec-controls">' +
+        '<button class="rec-btn" id="rec-start" onclick="startRec()">🎙 Iniciar grabación</button>' +
+        '<button class="rec-btn stop" id="rec-stop" onclick="stopRec()" disabled>⏹ Detener</button>' +
+        '<span class="rec-status" id="rec-status">Listo para grabar</span>' +
+      '</div>' +
+      '<audio id="audio-playback" class="audio-playback" controls style="display:none;"></audio>' +
+      '<div class="rubric">' +
+        '<div class="rubric-title">Criterios de evaluación</div>' +
+        '<div class="rubric-item">Fluidez — ¿Puedes hablar sin pausas largas?</div>' +
+        '<div class="rubric-item">Vocabulario — ¿Usas palabras variadas y apropiadas?</div>' +
+        '<div class="rubric-item">Precisión — ¿Tus oraciones son gramaticalmente correctas?</div>' +
+      '</div>';
+  }
+}
+
+function nextOpenQuestion() {
+  if (openStep === 0) {
+    openStep = 1;
+    renderOpenQuestion();
+  } else {
+    showResults();
+  }
+}
+
+async function startRec() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    audioChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = e => { if(e.data.size>0) audioChunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(audioChunks, {type:'audio/webm'});
+      const url = URL.createObjectURL(blob);
+      const pb = document.getElementById('audio-playback');
+      if(pb) { pb.src=url; pb.style.display='block'; }
+      const reader = new FileReader();
+      reader.onloadend = () => { speakingAudioBase64 = reader.result.split(',')[1]; };
+      reader.readAsDataURL(blob);
+      document.getElementById('rec-status').textContent = '✓ Grabación guardada';
+      document.getElementById('rec-status').className = 'rec-status';
+      stream.getTracks().forEach(t=>t.stop());
+    };
+    mediaRecorder.start();
+    document.getElementById('rec-start').disabled = true;
+    document.getElementById('rec-stop').disabled = false;
+    document.getElementById('rec-status').textContent = '● Grabando...';
+    document.getElementById('rec-status').className = 'rec-status recording';
+  } catch(e) {
+    alert('No se pudo acceder al micrófono. Por favor permite el acceso e intenta de nuevo.');
+  }
+}
+
+function stopRec() {
+  if(mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+    document.getElementById('rec-start').disabled = false;
+    document.getElementById('rec-stop').disabled = true;
+  }
 }
 
 // ── SEND RESULTS ──
@@ -478,8 +574,10 @@ function sendResults(level, pct, isInconsistent) {
     Puntaje: correctCount + '/' + questionCount,
     Porcentaje: pct + '%',
     Preguntas: questionCount,
+    Writing: writingAnswer || '',
     Inconsistencia: isInconsistent ? '⚠️ Entrevista recomendada' : 'OK',
   };
+  if (speakingAudioBase64) payload.audio = speakingAudioBase64;
   const params = new URLSearchParams();
   params.append('payload', JSON.stringify(payload));
   fetch(SCRIPT_URL, {
