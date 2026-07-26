@@ -277,7 +277,7 @@ let writingAnswer = '';
 let speakingAudioBase64 = null;
 let mediaRecorder = null;
 let audioChunks = [];
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwtl7hxn_DCvkSGTPO0S2R35AIFt0NU5CoAfEoKF5IpQwoNks3083mVeUvej2X2tcI1/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzVZesJ4Ht3_r1alLdmZaFUI6uGgZDZmzczH_49zYdby2bhZczTt88KsU_Q61OFX3EL/exec';
 
 // ── START ──
 function startTest() {
@@ -507,6 +507,11 @@ function renderOpenQuestion() {
     document.getElementById('open-num').textContent = (MAX_QUESTIONS + 2).toString();
     document.getElementById('open-q-text').textContent = 'Record a short audio (1–2 minutes) answering this question: Tell us about yourself — who are you, what do you do, and why do you want to improve your English?';
     document.getElementById('open-next-btn').textContent = 'Finalizar →';
+    document.getElementById('open-next-btn').onclick = function() {
+      this.textContent = 'Enviando...';
+      this.disabled = true;
+      nextOpenQuestion();
+    };
     document.getElementById('open-body').innerHTML =
       '<div class="rec-controls">' +
         '<button class="rec-btn" id="rec-start" onclick="startRec()">🎙 Iniciar grabación</button>' +
@@ -528,7 +533,17 @@ function nextOpenQuestion() {
     openStep = 1;
     renderOpenQuestion();
   } else {
-    showResults();
+    // Stop recording if still active
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+      // Wait for FileReader to finish before sending
+      setTimeout(() => showResults(), 1500);
+    } else if (speakingAudioBase64) {
+      showResults();
+    } else {
+      // No audio recorded or still processing - wait briefly
+      setTimeout(() => showResults(), 800);
+    }
   }
 }
 
@@ -581,23 +596,8 @@ function sendResults(level, pct, isInconsistent) {
     Preguntas: questionCount,
     Writing: writingAnswer || '',
     Inconsistencia: isInconsistent ? '⚠️ Entrevista recomendada' : 'OK',
+    audio: speakingAudioBase64 || null,
   };
-  if (speakingAudioBase64) payload.audio = speakingAudioBase64;
-  if (speakingAudioBase64) {
-    // Send audio separately to avoid payload size limits
-    const audioPayload = {
-      Fecha: payload.Fecha,
-      Nombre: payload.Nombre,
-      Apellido: payload.Apellido,
-      audio: speakingAudioBase64
-    };
-    fetch(SCRIPT_URL, {
-      method:'POST', mode:'no-cors',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(audioPayload)
-    }).catch(()=>{});
-    delete payload.audio;
-  }
 
   const params = new URLSearchParams();
   params.append('payload', JSON.stringify(payload));
